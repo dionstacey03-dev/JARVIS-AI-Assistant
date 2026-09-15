@@ -12,6 +12,9 @@ data/
 # Backup files
 *_backup.py
 
+# Duplicate test files
+voice_test?(*).py
+
 # Environment variables / secrets
 .env
 .env.*
@@ -21,10 +24,9 @@ data/
 .vscode/
 .idea/
 
-# Windows
+# Windows files
 Thumbs.db
 Desktop.ini
 
 # Logs
-*.logvoice_test (2).py
-"voice_test (2).py"
+*.log
