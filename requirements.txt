@@ -1,4 +1,12 @@
+# Core AI and voice input
 ollama>=0.4.0
-PyAudio>=0.2.14
-pyttsx3>=2.98
 SpeechRecognition>=3.10.4
+PyAudio>=0.2.14
+
+# Desktop utilities and screen vision
+psutil>=5.9.0
+Pillow>=10.0.0
+
+# Neural text-to-speech and audio playback
+edge-tts>=6.1.0
+pygame>=2.5.0
