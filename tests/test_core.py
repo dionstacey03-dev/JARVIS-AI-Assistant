@@ -7,6 +7,12 @@ from unittest.mock import patch
 
 import jarvis
 import memory
+import ui
+
+
+class ApplicationImportTests(unittest.TestCase):
+    def test_desktop_entrypoint_is_available(self):
+        self.assertTrue(callable(ui.launch))
 
 
 class MemoryStoreTests(unittest.TestCase):
