@@ -63,10 +63,11 @@ def _search(
 ) -> str | None:
     """Search a web service."""
 
-    if not command.startswith(prefix):
+    prefix_phrase = prefix.rstrip()
+    if command != prefix_phrase and not command.startswith(prefix):
         return None
 
-    query = command.removeprefix(prefix).strip()
+    query = command[len(prefix):].strip() if command.startswith(prefix) else ""
 
     if not query:
         return (
