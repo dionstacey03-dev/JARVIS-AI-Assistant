@@ -108,3 +108,19 @@ Run the test suite with:
 ```powershell
 python -m unittest discover -s tests -v
 ```
+
+## Manual Windows hardware validation
+
+Automated CI deliberately avoids accessing a real microphone, speaker, desktop session, or local Ollama service. Before treating a machine-specific setup as fully verified, run these checks on the target Windows PC:
+
+1. Activate the virtual environment and run `python jarvis.py`; confirm the command-center window opens.
+2. Submit `what time is it` and `open calculator`; confirm the response and application launch.
+3. Toggle Voice responses off and on; confirm typed requests still work in both states.
+4. Click Listen, speak a short sentence, and confirm the recognized request appears in the activity log.
+5. Submit `my name is Test User`, then `what is my name`; confirm the saved value is recalled. Remove the test entry from `data/memory.json` afterward if desired.
+6. Start `python jarvis.py --voice`, say `Hey Jarvis`, and confirm it listens for a command after the wake phrase.
+7. With Ollama running and the configured model pulled, ask a general question; then stop Ollama and confirm JARVIS displays a helpful fallback instead of crashing.
+8. Ask `what is on my screen` with Ollama and the configured vision model running; confirm the image analysis responds as expected.
+9. Close the desktop window while idle and confirm the process exits cleanly.
+
+Screen capture and cloud speech/TTS services can expose on-screen or spoken content to local or external services as described in the Privacy section above. Only run those checks when appropriate.
