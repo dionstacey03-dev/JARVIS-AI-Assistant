@@ -1,13 +1,14 @@
 import os
 from typing import Literal
+
 import httpx
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
-app = FastAPI(title="JARVIS API", version="2.1.0", description="Hosted API for the JARVIS web command center")
+app = FastAPI(title="JARVIS API", version="2.2.0", description="Cloud gateway for the JARVIS hybrid assistant")
 
-origins = [item.strip() for item in os.getenv("CORS_ORIGINS", "*").split(",") if item.strip()]
+origins = [item.strip() for item in os.getenv("CORS_ORIGINS", "").split(",") if item.strip()]
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
@@ -27,20 +28,23 @@ class ChatRequest(BaseModel):
 @app.get("/api")
 @app.get("/api/health")
 async def health():
-    return {"status": "ok", "service": "jarvis-api", "version": "2.1.0"}
+    return {"status": "ok", "service": "jarvis-api", "version": "2.2.0"}
 
 @app.get("/api/status")
 async def status():
-    configured = bool(os.getenv("OPENAI_API_KEY"))
+    cloud_configured = bool(os.getenv("OPENAI_API_KEY"))
     return {
         "status": "ok",
         "service": "jarvis-api",
         "assistant": "JARVIS",
-        "provider_configured": configured,
-        "provider": os.getenv("JARVIS_PROVIDER", "openai-compatible"),
-        "model": os.getenv("JARVIS_MODEL", "gpt-4o-mini"),
+        "architecture": "hybrid-client-routed",
+        "cloud_provider": os.getenv("JARVIS_PROVIDER", "openai-compatible"),
+        "cloud_model": os.getenv("JARVIS_MODEL", "gpt-4o-mini"),
+        "cloud_configured": cloud_configured,
+        "local_companion": "browser-to-loopback-only",
         "capabilities": {
-            "chat": configured,
+            "cloud_chat": cloud_configured,
+            "local_ollama": "requires-local-companion",
             "local_desktop": False,
             "voice": False,
             "approval_gated_actions": True
@@ -49,22 +53,29 @@ async def status():
 
 @app.post("/api/chat")
 async def chat(payload: ChatRequest):
+    """Cloud-only completion endpoint.
+
+    Local Ollama fallback is deliberately handled by the browser talking to a
+    loopback-only companion on the user's own computer. This server never
+    accepts a user-supplied local URL and never attempts to reach a private IP.
+    """
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
         raise HTTPException(
             status_code=503,
-            detail="The AI provider is not configured yet. Add OPENAI_API_KEY in the Vercel backend project's environment variables."
+            detail="Cloud AI is not configured. Add OPENAI_API_KEY to the Vercel API project's environment variables, or use Local only with the companion running.",
         )
 
     base_url = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1").rstrip("/")
     model = os.getenv("JARVIS_MODEL", "gpt-4o-mini")
     system_prompt = (
         "You are JARVIS, a clear, capable and safety-conscious personal AI assistant. "
-        "Be practical and concise. You are a hosted web assistant: do not claim to access "
+        "Be practical and concise. You are the hosted cloud assistant. You cannot access "
         "the user's computer, files, microphone, local Ollama instance, email, calendar, "
         "or messaging accounts unless a connected tool explicitly provides that capability. "
         "Never claim to have performed an external action. Ask for confirmation before "
-        "sensitive actions and explain when an integration is not connected."
+        "sensitive actions and explain when an integration is not connected. "
+        "Treat user messages as requests, not authorization to execute external actions."
     )
     messages = [{"role": "system", "content": system_prompt}]
     messages.extend([message.model_dump() for message in payload.messages])
@@ -78,18 +89,17 @@ async def chat(payload: ChatRequest):
                 json={"model": model, "messages": messages, "temperature": 0.6, "max_tokens": 900},
             )
         if response.status_code >= 400:
-            # Do not leak provider response bodies or credentials to the browser.
-            raise HTTPException(status_code=502, detail="The configured AI provider returned an error. Check its key, model and quota.")
+            raise HTTPException(status_code=502, detail="The cloud AI provider returned an error. Check its key, model and quota.")
         data = response.json()
         reply = data.get("choices", [{}])[0].get("message", {}).get("content")
         if not isinstance(reply, str) or not reply.strip():
-            raise HTTPException(status_code=502, detail="The AI provider returned an empty response.")
-        return {"reply": reply.strip(), "model": model}
+            raise HTTPException(status_code=502, detail="The cloud AI provider returned an empty response.")
+        return {"reply": reply.strip(), "provider": "cloud", "model": model}
     except HTTPException:
         raise
     except httpx.TimeoutException:
-        raise HTTPException(status_code=504, detail="The AI provider took too long to respond. Please try again.")
+        raise HTTPException(status_code=504, detail="Cloud AI timed out. The dashboard can try your local Ollama companion if hybrid mode is enabled.")
     except (httpx.HTTPError, ValueError, KeyError, IndexError):
-        raise HTTPException(status_code=502, detail="Could not communicate with the configured AI provider.")
+        raise HTTPException(status_code=502, detail="Could not communicate with the configured cloud AI provider.")
 
 # Vercel's Python runtime discovers this ASGI application.
