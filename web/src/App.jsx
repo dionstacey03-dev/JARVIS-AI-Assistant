@@ -1,0 +1,109 @@
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { Activity, AudioLines, Bot, BrainCircuit, CalendarDays, Check, ChevronDown, CircleHelp, Command, Cpu, Gauge, Headphones, LayoutDashboard, Menu, Mic, Monitor, MoreHorizontal, Paperclip, Plus, Search, Send, Settings2, ShieldCheck, Sparkles, Wifi, WifiOff, Zap } from 'lucide-react'
+
+const API = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '')
+const LOCAL_API = 'http://127.0.0.1:8765'
+const starter = [{ role:'assistant', content:"Good to see you. I'm JARVIS — your personal AI command center. What would you like to work on?" }]
+const quick = ['Summarise my day','Help me plan my tasks','Explain a technical concept','Brainstorm a project idea']
+
+function App(){
+  const [section,setSection] = useState('Overview')
+  const [messages,setMessages] = useState(starter)
+  const [input,setInput] = useState('')
+  const [sending,setSending] = useState(false)
+  const [api,setApi] = useState('checking')
+  const [apiInfo,setApiInfo] = useState(null)
+  const [localStatus,setLocalStatus] = useState('checking')
+  const [localToken,setLocalToken] = useState('')
+  const [providerMode,setProviderMode] = useState('hybrid')
+  const [activeProvider,setActiveProvider] = useState('none')
+  const [mobileOpen,setMobileOpen] = useState(false)
+  const [time,setTime] = useState(new Date())
+  const endRef = useRef(null)
+  useEffect(()=>{ const t=setInterval(()=>setTime(new Date()),1000); return ()=>clearInterval(t) },[])
+  useEffect(()=>{ checkApi(); checkLocal(); const t=setInterval(()=>{checkApi();checkLocal()},30000); return ()=>clearInterval(t) },[])
+  useEffect(()=>{ endRef.current?.scrollIntoView({behavior:'smooth'}) },[messages,sending])
+  async function checkApi(){
+    if(!API){setApi('offline');setApiInfo({detail:'Backend URL not configured'});return}
+    try{ const r=await fetch(API+'/api/health'); if(!r.ok) throw new Error('API unavailable'); const d=await r.json(); setApi(d.status==='ok'?'online':'offline'); setApiInfo(d) }
+    catch{setApi('offline');setApiInfo({detail:'Could not reach the backend'})}
+  }
+  async function checkLocal(){
+    try{
+      const response=await fetch(LOCAL_API+'/api/health',{signal:AbortSignal.timeout(2500)})
+      if(!response.ok) throw new Error('Local companion unavailable')
+      setLocalStatus('online')
+    }catch{setLocalStatus('offline')}
+  }
+  async function send(text=input){
+    const prompt=text.trim(); if(!prompt||sending)return
+    const next=[...messages,{role:'user',content:prompt}]
+    setMessages(next);setInput('');setSending(true);setActiveProvider('connecting')
+    const history=next.slice(-12).map(({role,content})=>({role,content}))
+    let cloudError=null
+    if(providerMode!=='local'){
+      try{
+        if(!API) throw new Error('Cloud API URL is not configured.')
+        const response=await fetch(API+'/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({messages:history})})
+        const data=await response.json()
+        if(!response.ok) throw new Error(data.detail||'Cloud AI request failed.')
+        setActiveProvider('cloud')
+        setMessages(v=>[...v,{role:'assistant',content:data.reply}])
+        setSending(false);return
+      }catch(e){cloudError=e}
+    }
+    if(providerMode!=='cloud'){
+      if(!localToken.trim()){
+        const reason=providerMode==='local'?'Enter your local companion token first.':'Cloud AI is unavailable and no local companion token is configured.'
+        setMessages(v=>[...v,{role:'assistant',content:reason+' Start the local companion on your PC, then enter its token above.'}])
+        setActiveProvider('none');setSending(false);return
+      }
+      try{
+        const response=await fetch(LOCAL_API+'/api/chat',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+localToken},body:JSON.stringify({messages:history})})
+        const data=await response.json()
+        if(!response.ok) throw new Error(data.detail||'Local Ollama request failed.')
+        setActiveProvider('local')
+        setMessages(v=>[...v,{role:'assistant',content:data.reply}])
+        setSending(false);return
+      }catch(e){
+        const cloudMessage=cloudError?' Cloud attempt: '+cloudError.message:''
+        setMessages(v=>[...v,{role:'assistant',content:'I could not reach local Ollama. '+e.message+cloudMessage}])
+        setActiveProvider('none');setSending(false);return
+      }
+    }
+    setMessages(v=>[...v,{role:'assistant',content:'Cloud AI is unavailable. '+(cloudError?.message||'Please check the backend configuration.')}])
+    setActiveProvider('none');setSending(false)
+  }
+  const greeting = useMemo(()=>{const h=time.getHours();return h<12?'Good morning':h<18?'Good afternoon':'Good evening'},[time])
+  const nav=[{label:'Overview',icon:LayoutDashboard},{label:'Assistant',icon:Bot},{label:'System monitor',icon:Monitor},{label:'Integrations',icon:Wifi},{label:'Memory',icon:BrainCircuit}]
+  return <div className="app-shell">
+    <aside className={'sidebar '+(mobileOpen?'open':'')}>
+      <div className="brand"><div className="brand-mark"><AudioLines size={22}/></div><div><strong>JARVIS</strong><span>PERSONAL INTELLIGENCE</span></div><button className="mobile-close" onClick={()=>setMobileOpen(false)}>×</button></div>
+      <div className="workspace-label">WORKSPACE</div>
+      <nav>{nav.map(({label,icon:Icon})=><button key={label} className={'nav-item '+(section===label?'active':'')} onClick={()=>{setSection(label);setMobileOpen(false)}}><Icon size={18}/><span>{label}</span>{label==='Assistant'&&<span className="nav-live"/>}</button>)}</nav>
+      <div className="side-divider"/>
+      <div className="workspace-label">YOUR SYSTEM</div>
+      <div className="system-mini"><span className={'status-dot '+(api==='online'?'green':'amber')}/><div><b>Cloud API</b><small>{api==='online'?'Connected':api==='checking'?'Checking connection':'Not connected'}</small></div></div><div className="system-mini local-mini"><span className={'status-dot '+(localStatus==='online'?'green':'amber')}/><div><b>Local Ollama</b><small>{localStatus==='online'?'Companion detected':'Not detected'}</small></div></div>
+      <div className="side-bottom"><div className="profile"><div className="avatar">DS</div><div><b>Dion</b><small>Personal workspace</small></div><MoreHorizontal size={18}/></div><div className="version">JARVIS WEB <span>V2.1</span></div></div>
+    </aside>
+    <main className="main">
+      <header className="topbar"><div className="top-left"><button className="mobile-menu" onClick={()=>setMobileOpen(!mobileOpen)}><Menu/></button><div className="crumb">Workspace <span>/</span> <b>{section}</b></div></div><div className="top-actions"><div className="connection"><i className={'status-dot '+(api==='online'?'green':'amber')}/>{api==='online'?'Systems operational':'Backend disconnected'}</div><button className="icon-btn" title="Search"><Search size={18}/></button><button className="icon-btn" title="Settings"><Settings2 size={18}/></button><div className="avatar small">DS</div></div></header>
+      <div className="page">
+      {section==='Overview'&&<><div className="welcome-row"><div><div className="eyebrow"><Sparkles size={14}/> YOUR INTELLIGENCE, AT A GLANCE</div><h1>{greeting}, Dion<span className="period">.</span></h1><p className="subheading">Your command center is ready. Here's your system at a glance.</p></div><div className="date-pill"><CalendarDays size={16}/>{time.toLocaleDateString(undefined,{weekday:'short',month:'short',day:'numeric',year:'numeric'})}</div></div>
+        <div className="hero-card"><div className="hero-grid"/><div className="hero-copy"><div className="hero-tag"><span className="pulse"/> JARVIS CORE <span className="tag-divider"/> PERSONAL AI</div><h2>Intelligence that<br/><em>works with you.</em></h2><p>Think clearly. Move faster. Get things done with your personal AI assistant.</p><button className="primary-btn" onClick={()=>setSection('Assistant')}>Open assistant <span>↗</span></button></div><div className="orb-wrap"><div className="orb-ring ring-one"/><div className="orb-ring ring-two"/><div className="orb"><AudioLines size={48}/></div><div className="orb-caption">JARVIS <span>● STANDBY</span></div></div><div className="hero-corner">01 / COMMAND</div></div>
+        <div className="section-heading"><div><h3>System overview</h3><p>Live service and capability status</p></div><span className="updated"><span className="status-dot green"/> AUTO-REFRESH 30S</span></div>
+        <div className="stats-grid"><Stat icon={Activity} label="API STATUS" value={api==='online'?'Online':api==='checking'?'Checking':'Offline'} note={apiInfo?.detail||'Cloud service connection'} tone={api==='online'?'good':'warn'}/><Stat icon={BrainCircuit} label="AI ENGINE" value={api==='online'?'Cloud ready':'Cloud unavailable'} note={localStatus==='online'?'Local Ollama companion detected':'Local companion not detected'} tone="blue"/><Stat icon={ShieldCheck} label="SAFETY LAYER" value="Active" note="Approval-first action planning" tone="good"/><Stat icon={Cpu} label="LOCAL COMPANION" value={localStatus==='online'?'Connected':'Not connected'} note="Loopback-only Ollama companion" tone="warn"/></div>
+        <div className="lower-grid"><div className="panel capabilities"><div className="panel-head"><div><h3>Capabilities</h3><p>What JARVIS can connect to</p></div><button className="text-btn" onClick={()=>setSection('Integrations')}>View all ↗</button></div>{[{icon:Bot,name:'AI conversations',desc:'Ask, explore and create',state:api==='online'?'Ready':'Setup needed'},{icon:Monitor,name:'Desktop monitoring',desc:'Local PC telemetry and status',state:'Local only'},{icon:Headphones,name:'Voice interface',desc:'Microphone and spoken responses',state:'Local only'},{icon:Zap,name:'Safe automation',desc:'Approval-gated action planning',state:'Foundation ready'}].map(x=><div className="cap-row" key={x.name}><div className="cap-icon"><x.icon size={17}/></div><div className="cap-text"><b>{x.name}</b><small>{x.desc}</small></div><span className="cap-state">{x.state}</span></div>)}</div>
+          <div className="panel activity-panel"><div className="panel-head"><div><h3>Quick launch</h3><p>Jump straight into a task</p></div><div className="mini-spark"><Zap size={16}/></div></div><button className="launch-card" onClick={()=>setSection('Assistant')}><div className="launch-icon"><Bot/></div><div><b>Start a conversation</b><small>Talk through an idea or task</small></div><span>↗</span></button><button className="launch-card" onClick={()=>setSection('System monitor')}><div className="launch-icon"><Gauge/></div><div><b>Check system status</b><small>View connected services</small></div><span>↗</span></button><div className="tip"><Sparkles size={15}/><span><b>Pro tip</b> — Connect an AI provider in your backend environment to enable live conversations.</span></div></div></div>
+      </>}
+      {section==='Assistant'&&<div className="assistant-layout"><div className="assistant-title"><div className="eyebrow"><Sparkles size={14}/> CONVERSATION SPACE</div><h1>Talk to JARVIS<span className="period">.</span></h1><p className="subheading">A thoughtful assistant for your ideas, questions and work.</p></div><div className="chat-panel"><div className="chat-top"><div className="chat-avatar"><AudioLines/></div><div className="chat-identity"><b>JARVIS Assistant</b><small><span className={'status-dot '+(api==='online'||localStatus==='online'?'green':'amber')}/>{activeProvider==='cloud'?'Responding via cloud AI':activeProvider==='local'?'Responding via local Ollama':api==='online'?'Cloud ready':localStatus==='online'?'Local companion ready':'Waiting for an AI provider'}</small></div><div className="provider-controls"><select aria-label="AI routing mode" value={providerMode} onChange={e=>setProviderMode(e.target.value)}><option value="hybrid">Hybrid · Cloud first</option><option value="local">Local only</option><option value="cloud">Cloud only</option></select><input aria-label="Local companion pairing token" type="password" value={localToken} onChange={e=>setLocalToken(e.target.value)} placeholder="Local token" autoComplete="off"/></div><button className="chat-new" onClick={()=>setMessages(starter)}><Plus size={15}/> New chat</button></div><div className="messages">{messages.map((m,i)=><div className={'message '+m.role} key={i}><div className="message-avatar">{m.role==='assistant'?<AudioLines size={16}/>: 'DS'}</div><div className="message-body"><span>{m.role==='assistant'?'JARVIS':'YOU'}</span><p>{m.content}</p></div></div>)}{sending&&<div className="message assistant"><div className="message-avatar"><AudioLines size={16}/></div><div className="typing"><i/><i/><i/></div></div>}<div ref={endRef}/></div>{messages.length===1&&<div className="suggestions"><span>TRY ASKING</span><div>{quick.map(q=><button key={q} onClick={()=>send(q)}>{q} <span>↗</span></button>)}</div></div>}<form className="composer" onSubmit={e=>{e.preventDefault();send()}}><input value={input} onChange={e=>setInput(e.target.value)} placeholder="Message JARVIS..." disabled={sending}/><button type="button" className="attach" title="Voice input is available through the local desktop app"><Mic size={18}/></button><button className="send-btn" disabled={!input.trim()||sending}><Send size={17}/></button></form><div className="composer-note"><ShieldCheck size={12}/> {providerMode==='hybrid'?'Cloud is tried first; local Ollama is used only as a fallback.':providerMode==='local'?'Messages go directly from this browser to your loopback Ollama companion.':'Messages are sent to the hosted cloud API.'} Sensitive actions are never executed by chat.</div></div></div>}
+      {section==='System monitor'&&<><div className="assistant-title"><div className="eyebrow"><Activity size={14}/> DEVICE & SERVICE HEALTH</div><h1>System monitor<span className="period">.</span></h1><p className="subheading">Cloud service status and local companion connectivity.</p></div><div className="monitor-grid"><div className="panel monitor-card"><Activity/><span>BACKEND API</span><b className={api==='online'?'good-text':'warn-text'}>{api==='online'?'Reachable':'Unavailable'}</b><small>{apiInfo?.detail||'Waiting for response'}</small></div><div className="panel monitor-card"><Monitor/><span>LOCAL OLLAMA COMPANION</span><b className={localStatus==='online'?'good-text':'warn-text'}>{localStatus==='online'?'Reachable':'Not detected'}</b><small>Loopback-only chat bridge. Desktop telemetry is not exposed by this service.</small></div><div className="panel monitor-card"><Cpu/><span>MODEL PROVIDER</span><b>{api==='online'?'Configured':'Not verified'}</b><small>Provider status is checked when a chat request is made.</small></div></div><div className="panel notice"><ShieldCheck/><div><b>Privacy by design</b><p>The hosted dashboard cannot inspect your laptop, microphone, files or local Ollama service by itself. Those capabilities require a separately installed local companion and your permission.</p></div></div></>}
+      {section==='Integrations'&&<><div className="assistant-title"><div className="eyebrow"><Wifi size={14}/> CONNECTED SERVICES</div><h1>Integrations<span className="period">.</span></h1><p className="subheading">Connect the tools that make JARVIS useful across your workflow.</p></div><div className="integration-grid">{[{icon:BrainCircuit,name:'AI model provider',desc:'OpenAI-compatible chat completion API',state:api==='online'?'API reachable':'Needs configuration',kind:'AI'},{icon:Monitor,name:'Windows companion',desc:'Local system metrics, apps and desktop controls',state:localStatus==='online'?'Companion detected':'Not connected',kind:'LOCAL'},{icon:CalendarDays,name:'Google Calendar',desc:'OAuth connection and event access',state:'Not connected',kind:'GOOGLE'},{icon:Bot,name:'WhatsApp Business',desc:'Cloud API messaging with explicit approval',state:'Not connected',kind:'META'},{icon:Activity,name:'Gmail',desc:'Read and draft email with OAuth consent',state:'Not connected',kind:'GOOGLE'},{icon:Headphones,name:'Voice services',desc:'Wake word, speech recognition and TTS',state:'Local only',kind:'DEVICE'}].map(x=><div className="panel integration-card" key={x.name}><div className="integration-icon"><x.icon/></div><span className="integration-kind">{x.kind}</span><h3>{x.name}</h3><p>{x.desc}</p><div className="integration-foot"><span className={'status-dot '+(x.state==='API reachable'?'green':'amber')}/>{x.state}</div></div>)}</div></>}
+      {section==='Memory'&&<><div className="assistant-title"><div className="eyebrow"><BrainCircuit size={14}/> PERSONAL CONTEXT</div><h1>Memory<span className="period">.</span></h1><p className="subheading">Your local-first memory and conversation context.</p></div><div className="panel memory-panel"><div className="memory-icon"><BrainCircuit size={28}/></div><h3>Memory stays on your device</h3><p>JARVIS V2 stores explicit memories and bounded conversation history locally in the desktop app. The hosted dashboard does not yet sync or expose that private data.</p><div className="memory-tags"><span><ShieldCheck size={13}/> Local storage</span><span><Check size={13}/> User-controlled</span></div></div></>}
+      <footer className="footer"><span>JARVIS INTELLIGENCE SYSTEM <b>•</b> BUILT FOR FOCUS</span><span>V2.1.0 <b>•</b> {time.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</span></footer>
+      </div>
+    </main>
+  </div>
+}
+function Stat({icon:Icon,label,value,note,tone}){return <div className="panel stat-card"><div className={'stat-icon '+tone}><Icon size={19}/></div><span className="stat-label">{label}</span><b className="stat-value">{value}</b><small>{note}</small></div>}
+export default App
