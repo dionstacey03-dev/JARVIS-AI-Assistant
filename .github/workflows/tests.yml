@@ -54,3 +54,21 @@ jobs:
       - name: Import FastAPI application
         working-directory: backend
         run: python -c "from api.index import app; assert app.title == 'JARVIS API'; print('FastAPI import OK')"
+
+  local-companion-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install local companion dependencies
+        run: pip install -r local_companion/requirements.txt
+      - name: Run companion security tests
+        working-directory: local_companion
+        run: python -m unittest -v
+      - name: Import local companion app
+        working-directory: local_companion
+        run: python -c "from app import app; assert app.title == 'JARVIS Local Companion'; print('Companion import OK')"
