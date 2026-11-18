@@ -26,13 +26,13 @@ Configure these in the API project's Vercel Settings → Environment Variables:
 - `OPENAI_API_KEY` — required for cloud AI. Add it directly in Vercel; never commit it or paste it into chat.
 - `OPENAI_BASE_URL` — optional OpenAI-compatible API base URL; defaults to OpenAI.
 - `JARVIS_MODEL` — optional model name; defaults to `gpt-4o-mini`.
-- `CORS_ORIGINS` — exact dashboard origin, for example `https://jarvis-dashboard-dionstacey03-9459.vercel.app`.
+- `CORS_ORIGINS` — exact dashboard origin, for example `https://jarvis-dashboard-three-xi.vercel.app`.
 
 The API health/status routes work without a provider key. Cloud chat returns a clear setup error until the key is configured.
 
 ## Dashboard environment
 
-Set `VITE_API_URL` in the dashboard Vercel project to the API deployment origin, for example `https://jarvis-api-dionstacey03-9459.vercel.app`. This is a public API base URL, not a secret.
+Set `VITE_API_URL` in the dashboard Vercel project to the API deployment origin, for example `https://jarvis-api-one.vercel.app`. This is a public API base URL, not a secret.
 
 ## Windows local companion setup
 
