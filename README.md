@@ -124,3 +124,45 @@ Automated CI deliberately avoids accessing a real microphone, speaker, desktop s
 9. Close the desktop window while idle and confirm the process exits cleanly.
 
 Screen capture and cloud speech/TTS services can expose on-screen or spoken content to local or external services as described in the Privacy section above. Only run those checks when appropriate.
+
+
+## JARVIS V2 foundations
+
+The V2 upgrade adds bounded local conversation history, a conservative action planner,
+integration readiness reporting, an opt-in WhatsApp Cloud API sender, and read-only
+system metrics.
+
+### Local conversation history
+
+Conversation turns are stored in `data/conversation.json` (ignored by Git), capped at
+40 turns and 4,000 characters per turn. This file is local user data; do not commit it.
+
+### Action approval and safety
+
+`orchestrator.py` separates planning from execution. External communication,
+calendar changes, email sending, and deletion are approval-gated. Unknown actions are
+rejected; there is no arbitrary shell execution tool exposed by the planner.
+
+### Optional integrations
+
+- WhatsApp: configure `WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, and optionally
+  `WHATSAPP_API_VERSION`. Sending requires `user_approved=True` at the call site.
+- Gmail and Google Calendar: set `GOOGLE_OAUTH_CLIENT_ID` and
+  `GOOGLE_OAUTH_CLIENT_SECRET` to indicate OAuth app configuration. This release does
+  not yet perform OAuth login or access Gmail/Calendar data; a consent-based OAuth
+  adapter remains a follow-up integration task.
+- No secrets belong in source files or committed configuration.
+
+### System metrics
+
+Use `system_monitor.get_system_snapshot()` for read-only CPU, memory, platform, and
+battery telemetry. Metrics are local and are not transmitted.
+
+### V2 tests
+
+Run:
+
+```powershell
+python -m unittest discover -s tests -v
+```
+
