@@ -117,6 +117,48 @@ class JarvisApp(tk.Tk):
                        activebackground=self.SURFACE, activeforeground=self.TEXT, bg=self.SURFACE, fg=self.TEXT,
                        font=("Segoe UI", 10), bd=0, highlightthickness=0, cursor="hand2").pack(anchor="w", padx=16)
         tk.Label(sidebar, text="Enter to send  •  Esc to clear", font=("Segoe UI", 8), bg=self.SURFACE, fg=self.MUTED).pack(anchor="w", padx=20, pady=(8, 0))
+        self._build_dashboard(sidebar)
+
+    def _build_dashboard(self, sidebar: tk.Frame) -> None:
+        """Show read-only local telemetry and integration readiness."""
+        from integrations import integration_status
+        from system_monitor import get_system_snapshot
+
+        self._divider(sidebar).pack(fill="x", padx=20, pady=(16, 12))
+        tk.Label(sidebar, text="LIVE SYSTEM", font=("Segoe UI", 10, "bold"),
+                 bg=self.SURFACE, fg=self.MUTED).pack(anchor="w", padx=20)
+        self.metrics_label = tk.Label(sidebar, text="Loading metrics…", justify="left",
+                                      font=("Cascadia Mono", 9), bg=self.SURFACE,
+                                      fg=self.TEXT)
+        self.metrics_label.pack(anchor="w", padx=20, pady=(8, 0))
+        tk.Label(sidebar, text="INTEGRATIONS", font=("Segoe UI", 9, "bold"),
+                 bg=self.SURFACE, fg=self.MUTED).pack(anchor="w", padx=20, pady=(12, 4))
+        statuses = integration_status()
+        self.integrations_label = tk.Label(
+            sidebar,
+            text="\n".join(f"{name.title()}: {state}" for name, state in statuses.items()),
+            justify="left", font=("Segoe UI", 8), bg=self.SURFACE, fg=self.MUTED,
+        )
+        self.integrations_label.pack(anchor="w", padx=20)
+        self._refresh_dashboard()
+
+    def _refresh_dashboard(self) -> None:
+        if self._closing:
+            return
+        try:
+            from system_monitor import get_system_snapshot
+            snapshot = get_system_snapshot()
+            battery = snapshot["battery_percent"]
+            battery_text = f"{battery}%" if battery is not None else "N/A"
+            self.metrics_label.configure(
+                text=(f"CPU       {snapshot['cpu_percent']}%\n"
+                      f"Memory    {snapshot['memory_percent']}% "
+                      f"({snapshot['memory_used_gb']} GB)\n"
+                      f"Battery   {battery_text}")
+            )
+        except Exception:
+            self.metrics_label.configure(text="System metrics unavailable")
+        self.after(3000, self._refresh_dashboard)
 
     def _panel(self, parent: tk.Widget) -> tk.Frame:
         return tk.Frame(parent, bg=self.SURFACE, highlightbackground=self.BORDER, highlightthickness=1)
