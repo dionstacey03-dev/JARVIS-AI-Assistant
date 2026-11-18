@@ -9,6 +9,9 @@ import ipaddress
 from typing import Literal
 
 import httpx
+from dotenv import load_dotenv
+
+load_dotenv()
 from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
