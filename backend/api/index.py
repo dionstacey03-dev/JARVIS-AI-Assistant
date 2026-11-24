@@ -55,7 +55,7 @@ async def health():
 
 @app.get("/api/status")
 async def status():
-    cloud_configured = bool(os.getenv("OPENAI_API_KEY"))
+    cloud_configured = bool(os.getenv("OPENAI_API_KEY")) and len(ACCESS_TOKEN) >= 32
     return {
         "status": "ok",
         "service": "jarvis-api",
