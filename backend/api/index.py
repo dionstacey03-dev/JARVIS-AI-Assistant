@@ -1,10 +1,33 @@
+import hmac
 import os
+import time
 from typing import Literal
 
 import httpx
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
+
+ACCESS_TOKEN = os.getenv("JARVIS_API_ACCESS_TOKEN", "")
+RATE_LIMIT_MAX_REQUESTS = 20
+RATE_LIMIT_WINDOW_SECONDS = 900
+_rate_limit = {"count": 0, "reset_at": 0.0}
+
+def verify_cloud_access(authorization: str | None) -> None:
+    if len(ACCESS_TOKEN) < 32:
+        raise HTTPException(status_code=503, detail="Cloud access is not configured. Set a random JARVIS_API_ACCESS_TOKEN of at least 32 characters in the API environment.")
+    expected = f"Bearer {ACCESS_TOKEN}"
+    if not authorization or not hmac.compare_digest(authorization, expected):
+        raise HTTPException(status_code=401, detail="A valid JARVIS cloud access token is required.")
+    now = time.monotonic()
+    if now >= _rate_limit["reset_at"]:
+        _rate_limit["count"] = 0
+        _rate_limit["reset_at"] = now + RATE_LIMIT_WINDOW_SECONDS
+    if _rate_limit["count"] >= RATE_LIMIT_MAX_REQUESTS:
+        retry_after = max(1, int(_rate_limit["reset_at"] - now))
+        raise HTTPException(status_code=429, detail="Cloud request limit reached. Try again later.", headers={"Retry-After": str(retry_after)})
+    _rate_limit["count"] += 1
+
 
 app = FastAPI(title="JARVIS API", version="2.2.0", description="Cloud gateway for the JARVIS hybrid assistant")
 
@@ -52,7 +75,8 @@ async def status():
     }
 
 @app.post("/api/chat")
-async def chat(payload: ChatRequest):
+async def chat(payload: ChatRequest, authorization: str | None = Header(default=None)):
+    verify_cloud_access(authorization)
     """Cloud-only completion endpoint.
 
     Local Ollama fallback is deliberately handled by the browser talking to a
