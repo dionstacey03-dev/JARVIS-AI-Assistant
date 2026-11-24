@@ -27,8 +27,9 @@ Configure these in the API project's Vercel Settings → Environment Variables:
 - `OPENAI_BASE_URL` — optional OpenAI-compatible API base URL; defaults to OpenAI.
 - `JARVIS_MODEL` — optional model name; defaults to `gpt-4o-mini`.
 - `CORS_ORIGINS` — exact dashboard origin, for example `https://jarvis-dashboard-three-xi.vercel.app`.
+- `JARVIS_API_ACCESS_TOKEN` — generate a random secret of at least 32 characters and add it only to the Vercel API project's environment variables. Enter the same value in the dashboard's Cloud token field. Do not commit the real token. The API applies a 20-request/15-minute per-instance cap as an additional best-effort guard; use a shared rate-limit service or Vercel edge controls for multi-instance enforcement.
 
-The API health/status routes work without a provider key. Cloud chat returns a clear setup error until the key is configured.
+The API health/status routes work without provider credentials. Cloud chat requires both `OPENAI_API_KEY` and `JARVIS_API_ACCESS_TOKEN`; it fails closed until both are configured.
 
 ## Dashboard environment
 
@@ -48,7 +49,7 @@ See [local_companion/README.md](local_companion/README.md). In short:
 uvicorn app:app --host 127.0.0.1 --port 8765
 ```
 
-6. In the dashboard Assistant page, select Hybrid or Local only and paste the same token into the Local token field.
+6. In the dashboard Assistant page, select Hybrid or Local only and paste the same token into the Local token field. For cloud chat, enter the `JARVIS_API_ACCESS_TOKEN` in the Cloud token field.
 
 Never bind the companion to `0.0.0.0`, expose port 8765 through a tunnel, or disable token/origin checks. The local token is used only by the browser-to-loopback request and is not sent to Vercel.
 
